@@ -1,7 +1,8 @@
+import os
 import sys
+import tempfile
 
-# Import LEADTOOLS Demo common modules =
-sys.path.append("C:/LEADTOOLS22/Examples/Common/Python") 
+# sys.path.append("C:/LEADTOOLS22/Examples/Common/Python") 
 from DemosTools import *
 from leadtools import LibraryLoader
 from UnlockSupport import Support
@@ -20,23 +21,28 @@ LibraryLoader.add_reference("Newtonsoft.Json")
 from Newtonsoft.Json import *
 from System.Collections.Generic import *
 from System.IO import *
+from System.Net import *
 
 
 class LeadTools:
     def __init__(self, config, logger):
         self.logger = logger
-        # Support.set_license("/fsd/LEADTOOLS22/Support/Common/License") 
-        Support.set_license("C:/LEADTOOLS22/Support/Common/License") 
+        self.config = config
+        self.license = config.get_value('leadtools.license_path')
+        self.startup_parameters = config.get_value('leadtoools.startup_parameters')
 
-    def ocr_engine(self):
-        if not self._ocr_engine:
-            raise Exception('Cannot access ocr_engine before creating')
-        return self._ocr_engine
-    
+        self.enable_leadtools_ocr = config.get_value("enable_leadtools_ocr")
+
+        if self.enable_leadtools_ocr:
+            try:
+                Support.set_license(self.license)
+            except Exception as exception:
+                self.logger.exception(f"Error while setting license to Leadtools. Error: {exception}")
+
     def connect(self):
-        try:        
+        try:   
             ocr_engine = OcrEngineManager.CreateEngine(OcrEngineType.LEAD) 
-            ocr_engine.Startup(None, None, None, r"C:\LEADTOOLS22\Bin\Common\OcrLEADRuntime") 
+            ocr_engine.Startup(None, None, None, self.startup_parameters) 
 
             ocr_engine.SettingManager.SetEnumValue("Recognition.RecognitionModuleTradeoff", 0)
             ocr_engine.SettingManager.SetBooleanValue("Recognition.Words.DiscardLowConfidenceZones", True)
@@ -49,11 +55,32 @@ class LeadTools:
             return ocr_engine
         except Exception as exception:
             self.logger.exception(f"Unknown error while connecting to Leadtools. Error: {exception}")
-            raise exception
-        
-    # def close(self):
-    #     ocr_engine = self.ocr_engine()
-    #     ocr_engine.Dispose()
+            raise exception   
+          
+    def run_leadtools_ocr_on_temp_file(self, ocr_engine, path, file_content, lang=None):
+        text = ''
+        file_extension = os.path.splitext(path)[1].lower()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as file_obj:
+            file_name = file_obj.name
+            file_obj.write(file_content)
+
+        self.logger.info('run_leadtools_ocr_on_temp_file %s %s' % (file_name, file_extension))
+        text = self.run_leadtools_ocr(ocr_engine, file_name, lang)
+        os.remove(file_name)
+        return text
+    
+    def run_leadtools_icr_on_temp_file(self, ocr_engine, path, file_content, lang=None):
+        text = ''
+        file_extension = os.path.splitext(path)[1].lower()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as file_obj:
+            file_name = file_obj.name
+            file_obj.write(file_content)
+
+        self.logger.info('run_leadtools_icr_on_temp_file %s %s' % (file_name, file_extension))
+        text = self.run_leadtools_icr(ocr_engine, file_name, lang)
+        os.remove(file_name)
+        return text
+    
 
     def run_leadtools_ocr(self, ocr_engine, file, lang=None):
         ocr_document = ocr_engine.DocumentManager.CreateDocument() 
@@ -100,10 +127,10 @@ class LeadTools:
         # for lang in supportedLanguages:
         #     print(lang)
 
-        enabledLanguages = ocr_engine.LanguageManager.GetEnabledLanguages()
-        for lang in enabledLanguages:
-            # print(lang)
-            self.logger.info(lang)
+        # enabledLanguages = ocr_engine.LanguageManager.GetEnabledLanguages()
+        # for lang in enabledLanguages:
+        #     # print(lang)
+        #     self.logger.info(lang)
 
 
         for ocr_page in ocr_document.Pages:
@@ -122,4 +149,3 @@ class LeadTools:
         ocr_document.Dispose()
 
         return all_pages_text
-

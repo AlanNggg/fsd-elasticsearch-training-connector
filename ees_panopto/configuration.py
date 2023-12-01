@@ -71,7 +71,6 @@ class Configuration:
             self.__configurations["include"]["ocr_path_template"] += self.get_custom_ocr_configure_from_db()
         else:
             self.__configurations["include"]["ocr_path_template"] = self.get_custom_ocr_configure_from_db()
-        print('self.__configurations["include"]["ocr_path_template"]', self.__configurations["include"]["ocr_path_template"])
 
     def get_custom_ocr_configure_from_db(self):
         connection = pymysql.connect(host='10.18.2.188',

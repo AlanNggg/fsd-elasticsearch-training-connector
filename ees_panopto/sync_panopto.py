@@ -137,10 +137,10 @@ class SyncPanopto:
             session_public_id = video.sessionPublicID
             group_type = video.groupType
 
-            self.logger.info(f'fetching videos {public_id}, session {session_public_id}, group {group_type}')
-
             doc = {}
             url = self.get_video_url(public_id)
+
+            self.logger.info(f'Fetching video from {url} with public id {public_id}, session public id {session_public_id}, group type {group_type}')
 
             doc['category'] = self.get_category(url)
 

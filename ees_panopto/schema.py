@@ -143,6 +143,21 @@ schema = {
             }
         }
     },
+    'leadtools.license_path': {
+        'required': True,
+        'type': 'string',
+        'empty': False
+    },
+    'leadtoools.startup_parameters': {
+        'required': True,
+        'type': 'string',
+        'empty': False
+    },
+    'leadtools.common_module_python_path': {
+        'required': True,
+        'type': 'string',
+        'empty': False
+    },
     'start_time': {
         'required': False,
         'type': 'datetime',

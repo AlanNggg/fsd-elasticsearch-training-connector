@@ -18,26 +18,10 @@ except ImportError:
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-sys.path.append("C:/LEADTOOLS22/Examples/Common/Python") 
-from DemosTools import *
-from leadtools import LibraryLoader
-from UnlockSupport import Support
-
-LibraryLoader.add_reference("Leadtools") 
-from Leadtools import *
-from Leadtools import RasterSupport
-
-LibraryLoader.add_reference("Leadtools.Ocr") 
-from Leadtools.Ocr import *
-
-LibraryLoader.add_reference("Leadtools.Document") 
-from Leadtools.Document import *
-
 from .configuration import Configuration
 from .elastic_search_wrapper import ElasticSearchWrapper
 from .enterprise_search_wrapper import EnterpriseSearchWrapper
 from .indexing_rule import IndexingRules
-from .leadtools_engine import LeadTools
 from .local_storage import LocalStorage
 from .mssql_client import MSSQL
 from .panopto_client import Panopto
@@ -158,6 +142,12 @@ class BaseCommand:
 
     @cached_property
     def leadtools_engine(self):
+        common_module = self.config.get_value('leadtools.common_module_python_path')
+        print(common_module)
+        sys.path.append(common_module)
+        
+        from .leadtools_engine import LeadTools
+
         return LeadTools(self.config, self.logger) 
     
     @cached_property
