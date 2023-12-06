@@ -31,7 +31,7 @@ PUBLIC_GROUP = 6
 
 query_videos = f"""
 select 
-	delivery.publicID,
+    delivery.publicID,
 	session.longName, 
 	session.deletedByUserKey,
 	session.abstract,
@@ -42,18 +42,33 @@ select
     delivery.hasCaptions,
     delivery.sessionID,
     [group].type as groupType
-from session 
-join delivery on session.id = delivery.sessionID
-join lkp_PlayableObjectType on lkp_PlayableObjectType.id = session.playableObjectType 
-join sessionTimes on session.id = sessionTimes.sessionId
-join sessionGroup on session.sessionGroupID = sessionGroup.id
-join aclGroupEntry on delivery.aclID = aclGroupEntry.aclID
-join [group] on aclGroupEntry.groupID = [group].id
-where 
-	lkp_PlayableObjectType.id = 0 -- 0 = video, 1 = playlist
-	and delivery.lifeCycleState = 0
-    and [group].type = 6 -- 6 = public group
-order by startTime desc
+from aclGroupEntry
+    inner join delivery on delivery.aclID = aclGroupEntry.aclID
+    inner join session on session.id = delivery.sessionID and session.lifeCycleState = 0
+    inner join sessiongroup on sessiongroup.id = session.sessiongroupid
+    inner join sessionTimes on sessionTimes.sessionId = session.id
+    inner join [group] on [group].id = aclGroupEntry.groupID and [group].type = 6
+    inner join lkp_PlayableObjectType on lkp_PlayableObjectType.id = session.playableObjectType and lkp_PlayableObjectType.id = 0 -- 0 = video, 1 = playlist
+union all
+select 
+    delivery.publicID,
+	session.longName, 
+	session.deletedByUserKey,
+	session.abstract,
+    sessionTimes.startTime,
+    sessionTimes.endTime,
+    session.publicID as sessionPublicID,
+	delivery.lifeCycleState,
+    delivery.hasCaptions,
+    delivery.sessionID,
+    [group].type as groupType
+from aclGroupEntry
+    inner join sessionGroup on sessionGroup.aclID = aclGroupEntry.aclID
+    inner join session on session.sessionGroupId = sessionGroup.id
+    inner join delivery on delivery.sessioniD = session.id and session.lifeCycleState = 0
+    inner join sessionTimes on sessionTimes.sessionId = session.id
+    inner join [group] on [group].id = aclGroupEntry.groupID and [group].type = 6
+    inner join lkp_PlayableObjectType on lkp_PlayableObjectType.id = session.playableObjectType and lkp_PlayableObjectType.id = 0 -- 0 = video, 1 = playlist
 """
 
 query_event_targets = f"""
