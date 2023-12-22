@@ -61,6 +61,13 @@ def _parser():
         metavar="INFO_LOG_FILE_PATH",
         help="path to the info log file"
     )
+    parser.add_argument(
+        "-s",
+        '--source',
+        type=str,
+        metavar="SOURCE",
+        help="elasticsearch source"
+    )
 
     subparsers = parser.add_subparsers(dest="cmd")
     subparsers.required = True

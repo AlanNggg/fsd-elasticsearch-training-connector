@@ -16,10 +16,25 @@ class ElasticSearchWrapper:
     def __init__(self, logger, config, args):
         self.logger = logger
         self.host = config.get_value("elasticsearch.host_url")
-        self.source = config.get_value("elasticsearch.source")
+
+        if not args.source:
+            self.source = config.get_value("elasticsearch.source")
+        else:
+            self.source = args.source
+            
         self.username = config.get_value("elasticsearch.username")
         self.password = config.get_value("elasticsearch.password")
-        self.elastic_search_client = Elasticsearch(self.host, verify_certs=False, ssl_show_warn=False, http_auth=(self.username, self.password))
+        self.elastic_search_client = Elasticsearch(
+            self.host, 
+            verify_certs=False, 
+            ssl_show_warn=False, 
+            http_auth=(self.username, self.password),
+            # sniff_on_start=True,  # sniff before doing anything
+            sniff_on_connection_fail=True,  # refresh nodes after a node fails to respond
+            sniffer_timeout=60,  # and also every 60 seconds
+            retry_on_timeout=True,  
+        )
+        self.retry_count = int(config.get_value("retry_count"))
 
     def add_permissions(self, user_name, permission_list):
         raise Exception("Not Implemented")
@@ -36,7 +51,7 @@ class ElasticSearchWrapper:
     def delete_documents(self, document_ids):
         raise Exception("Not Implemented")
 
-    def index_documents(self, documents):
+    def index_documents(self, documents, timeout):
         """Indexes one or more new documents into a custom content source, or updates one
         or more existing documents
         :param documents: list of documents to be indexed
@@ -44,15 +59,20 @@ class ElasticSearchWrapper:
         """
         try:
             # raise_on_error: DO NOT raise BulkIndexError
-            responses = bulk(self.elastic_search_client, actions=documents, index=self.source, raise_on_error=False)
-            self.logger.info('responses')
+            responses = bulk(
+                self.elastic_search_client, 
+                actions=documents, 
+                index=self.source, 
+                max_retries=self.retry_count, 
+                request_timeout=timeout,
+                raise_on_error=False,
+                stats_only=True)
             self.logger.info(responses)
-        # except BulkIndexError as e:
-        #     print(f"{len(e.errors)} documents failed to index:")
-        #     for err in e.errors:
-        #         print(err)
-        except Exception as exception:
-            self.logger.exception(f"Error while indexing the documents. Error: {exception}")
-            raise exception
-        finally:
             return responses
+        # except BulkIndexError as e:
+        #     self.logger.exception(f"{len(e.errors)} documents failed to index:")
+            # for err in e.errors:
+            #     print(err)
+        except Exception as exception:
+            self.logger.error(f"Error while indexing the documents. Error: {exception}")
+        return None
