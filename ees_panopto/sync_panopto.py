@@ -21,6 +21,7 @@ from .utils import hash_id, run_tika
 requests.packages.urllib3.disable_warnings()
 
 # event target type
+POWERPOINT = 1
 TRANSCRIPT = 6
 MACHINE_TRANSCRIPT = 8
 USER_CREATED_TRANSCRIPT = 11
@@ -49,6 +50,7 @@ from aclGroupEntry
     inner join sessionTimes on sessionTimes.sessionId = session.id
     inner join [group] on [group].id = aclGroupEntry.groupID and [group].type = 6
     inner join lkp_PlayableObjectType on lkp_PlayableObjectType.id = session.playableObjectType and lkp_PlayableObjectType.id = 0 -- 0 = video, 1 = playlist
+where sessionTimes.startTime >= ? and sessionTimes.startTime <= ?
 union all
 select 
     delivery.publicID,
@@ -69,6 +71,7 @@ from aclGroupEntry
     inner join sessionTimes on sessionTimes.sessionId = session.id
     inner join [group] on [group].id = aclGroupEntry.groupID and [group].type = 6
     inner join lkp_PlayableObjectType on lkp_PlayableObjectType.id = session.playableObjectType and lkp_PlayableObjectType.id = 0 -- 0 = video, 1 = playlist
+where sessionTimes.startTime >= ? and sessionTimes.startTime <= ? 
 """
 
 query_event_targets = f"""
@@ -102,7 +105,17 @@ where
 order by time
 """
 
-
+query_slides = f"""
+select
+    title,
+    content,
+    eventTargetId,
+    absoluteSeconds
+from slideEvent
+where 
+    eventTargetId = ?
+order by absoluteSeconds
+"""
 
 thumbnail_root_dir = r'\\10.18.25.144\Web';
 
@@ -113,7 +126,7 @@ class SyncPanopto:
         logger,
         mssql_client,
         indexing_rules,
-        documents_to_index,
+        queue,
         leadtools_engine,
         panopto_client,
         start_time = None,
@@ -124,7 +137,7 @@ class SyncPanopto:
         self.mssql_client = mssql_client
         self.indexing_rules = indexing_rules
         self.panopto_sync_thread_count = config.get_value("panopto_sync_thread_count")
-        self.documents_to_index = documents_to_index
+        self.queue = queue
         self.leadtools_engine = leadtools_engine
         self.panopto_client = panopto_client
 
@@ -141,11 +154,24 @@ class SyncPanopto:
         return url
     
 
-    def fetch_videos(self):
+    def fetch_videos(self, duration):
+        start_time, end_time = duration[0], duration[1]
+        base_date = datetime.datetime(1600, 12, 31)
+
+        start_date_time = datetime.datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
+        time_difference = start_date_time - base_date
+        start_time = time_difference.total_seconds()
+
+        end_date_time = datetime.datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%SZ")
+        time_difference = end_date_time - base_date
+        end_time = time_difference.total_seconds()
+
         docs = []
 
         conn = self.mssql_client.connect()
-        videos = self.mssql_client.execute_query(conn, query_videos)
+        videos = self.mssql_client.execute_query(conn, query_videos, (start_time, end_time, start_time, end_time))
+
+        self.logger.info(f'Fetching videos from {start_time} to {end_time}')
 
         for video in videos:
             public_id = video.publicID
@@ -159,7 +185,6 @@ class SyncPanopto:
 
             doc['category'] = self.get_category(url)
 
-            base_date = datetime.datetime(1600, 12, 31)
             date_time = base_date + datetime.timedelta(seconds=video.startTime)
 
             doc['id'] = public_id
@@ -182,21 +207,31 @@ class SyncPanopto:
                 event_target_id = event_target.eventTargetId 
                 type_id = event_target.eventTargetTypeID 
 
-                if type_id == TRANSCRIPT or \
-                    type_id == MACHINE_TRANSCRIPT or \
-                    type_id == USER_CREATED_TRANSCRIPT:
+                # TRANSCRIPT, MACHINE_TRANSCRIPT, USER_CREATED_TRANSCRIPT
+                captions = self.mssql_client.execute_query(conn, query_captions, (event_target_id))
 
-                    captions = self.mssql_client.execute_query(conn, query_captions, (event_target_id))
+                for caption in captions:
+                    data = caption.data
+                    contents.append(data)
 
-                    for caption in captions:
-                        data = caption.data
-                        contents.append(data)
-                elif type_id == PRIMARY:
-                    events = self.mssql_client.execute_query(conn, query_events, (event_target_id))
+                # PRIMARY
+                events = self.mssql_client.execute_query(conn, query_events, (event_target_id))
 
-                    for event in events:
-                        caption = event.caption
-                        contents.append(caption)
+                for event in events:
+                    caption = event.caption
+                    contents.append(caption)
+
+                # POWERPOINT
+                slides = self.mssql_client.execute_query(conn, query_slides, (event_target_id))
+                for slide in slides:
+                    slide_title = slide.title
+
+                    if slide_title:
+                        contents.append(slide_title)
+
+                    slide_content = slide.content
+                    if slide_content:
+                        contents.append(slide_content)
             
             thumbnail_folder_path = thumbnail_root_dir + f'/{session_public_id}/*_et/thumbs/*.jpg'
             thumbnail_paths = glob.glob(thumbnail_folder_path)
@@ -251,16 +286,19 @@ class SyncPanopto:
         
 
 
-    def perform_sync(self):
+    def perform_sync(self, date_ranges):
+        documents_to_index = []
         ids_storage = {}
+        
         try:
-            fetched_documents = self.fetch_videos()
+            fetched_documents = self.fetch_videos(date_ranges)
             
-            self.documents_to_index.extend(fetched_documents)
+            self.queue.append_to_queue(fetched_documents)
+            documents_to_index.extend(fetched_documents)
         except Exception as exception:
             self.logger.error(f"Error while fetching videos. Error: {exception}")
 
-        for doc in fetched_documents:
+        for doc in documents_to_index:
             ids_storage.update({doc["id"]: doc["url"]})
 
         print('finished')

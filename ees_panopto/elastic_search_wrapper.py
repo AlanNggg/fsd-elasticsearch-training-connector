@@ -5,9 +5,8 @@
 #
 """This module perform operations related to Enterprise Search based on the Enterprise Search version
 """
-from elasticsearch.helpers import BulkIndexError, bulk
-
 from elasticsearch import Elasticsearch
+from elasticsearch.helpers import BulkIndexError, bulk
 
 
 class ElasticSearchWrapper:

@@ -25,12 +25,14 @@ INDEXING_TYPE = "incremental"
 class IncrementalSyncCommand(BaseCommand):
     """This class start execution of incremental sync feature."""
 
-    def start_producer(self, documents_to_index, time_range):
+    def start_producer(self, queue, time_range):
         """This method starts async calls for the producer which is responsible for fetching documents from the
         SharePoint and pushing them in the shared queue
         :param queue: Shared queue to fetch the stored documents
         """
         self.logger.debug("Starting the incremental indexing..")
+
+        thread_count = self.config.get_value("panopto_sync_thread_count")
 
         start_time, end_time = time_range["start_time"], time_range["end_time"]
 
@@ -40,33 +42,44 @@ class IncrementalSyncCommand(BaseCommand):
                 self.logger,
                 self.mssql_client,
                 self.indexing_rules,
-                documents_to_index,
+                queue,
                 self.leadtools_engine,
                 self.panopto_client,
                 start_time,
                 end_time,
             )
+            datelist = split_date_range_into_chunks(
+                start_time,
+                end_time,
+                thread_count,
+            )
+            time_range_list = [(datelist[num], datelist[num + 1]) for num in range(0, thread_count)]
             storage_with_collection = self.local_storage.get_storage_with_collection()
-            global_keys = sync_panopto.perform_sync()
+            global_keys = self.create_jobs(thread_count, sync_panopto.perform_sync, (), time_range_list)
 
             try:
                 storage_with_collection["global_keys"]["videos"].update(global_keys)
             except ValueError as value_error:
                 self.logger.error(f"Exception while updating storage: {value_error}")
+
+            for _ in range(self.config.get_value("enterprise_search_sync_thread_count")):
+                queue.end_signal()
             
         except Exception as exception:
             self.logger.exception(f"Error while fetching the objects . Error {exception}")
             raise exception
         self.local_storage.update_storage(storage_with_collection)
 
-    def start_consumer(self, documents_to_index):
+    def start_consumer(self, queue):
         """This method starts async calls for the consumer which is responsible for indexing documents to the
         Enterprise Search
         :param queue: Shared queue to fetch the stored documents
         """
         logger = self.logger
-        sync_es = SyncElasticSearch(self.config, logger, self.elastic_search_custom_client, documents_to_index)
-        sync_es.perform_sync()
+        thread_count = self.config.get_value("enterprise_search_sync_thread_count")
+        sync_es = SyncElasticSearch(self.config, logger, self.elastic_search_custom_client, queue)
+        
+        self.create_jobs(thread_count, sync_es.perform_sync, (True), None)
 
     def execute(self):
         """This function execute the start function."""
@@ -83,9 +96,9 @@ class IncrementalSyncCommand(BaseCommand):
         }
         logger.info(f"Indexing started at: {current_time}")
 
-        documents_to_index = []
-        self.start_producer(documents_to_index, time_range)
-        self.start_consumer(documents_to_index)
+        queue = ConnectorQueue(logger)
+        self.start_producer(queue, time_range)
+        self.start_consumer(queue)
         checkpoint.set_checkpoint(current_time, INDEXING_TYPE, 'panopto')
         logger.info(f"Indexing ended at: {get_current_time()}")
         

@@ -109,6 +109,34 @@ class BaseCommand:
             based on the patterns defined in configuration file.
         """
         return IndexingRules(self.config)
+    
+    def create_jobs(self, thread_count, func, args, iterable_list):
+        """Apply async calls using multithreading to the targeted function
+        :param thread_count: Total number of threads to be spawned
+        :param func: The target function on which the async calls would be made
+        :param args: Arguments for the targeted function
+        :param iterable_list: list to iterate over and create thread
+        """
+        documents = {}
+        # If iterable_list is present, then iterate over the list and pass each list element
+        # as an argument to the async function, else iterate over number of threads configured
+        if iterable_list:
+            with ThreadPoolExecutor(max_workers=thread_count) as executor:
+                future_to_path = {executor.submit(func, *args, list_element):
+                                  list_element for list_element in iterable_list}
+
+                for future in as_completed(future_to_path):
+                    path = future_to_path[future]
+                    try:
+                        documents.update(future.result())
+                    except Exception as exception:
+                        self.logger.exception(f"Error while fetching in path {path}. Error {exception}")
+        else:
+            with ThreadPoolExecutor(max_workers=thread_count) as executor:
+                for _ in range(thread_count):
+                    executor.submit(func, *args)
+        return documents
+
 
     @staticmethod
     def producer(thread_count, func, args, items, wait=False):
