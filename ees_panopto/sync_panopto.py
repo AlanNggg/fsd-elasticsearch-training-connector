@@ -117,7 +117,8 @@ where
 order by absoluteSeconds
 """
 
-thumbnail_root_dir = r'\\10.18.25.144\Web';
+thumbnail_root_dir = r'\\10.18.25.144\Web'
+
 
 class SyncPanopto:
     def __init__(
@@ -129,14 +130,15 @@ class SyncPanopto:
         queue,
         leadtools_engine,
         panopto_client,
-        start_time = None,
-        end_time = None,
+        start_time=None,
+        end_time=None,
     ):
         self.logger = logger
         self.config = config
         self.mssql_client = mssql_client
         self.indexing_rules = indexing_rules
-        self.panopto_sync_thread_count = config.get_value("panopto_sync_thread_count")
+        self.panopto_sync_thread_count = config.get_value(
+            "panopto_sync_thread_count")
         self.queue = queue
         self.leadtools_engine = leadtools_engine
         self.panopto_client = panopto_client
@@ -147,29 +149,30 @@ class SyncPanopto:
         # for incremental sync
         self.start_time = start_time
         self.end_time = end_time
-        
-        
-    def get_video_url(self, public_id):        
+
+    def get_video_url(self, public_id):
         url = f'{self.host}//Panopto/Pages/Viewer.aspx?id={public_id}'
         return url
-    
 
     def fetch_videos(self, duration):
         start_time, end_time = duration[0], duration[1]
         base_date = datetime.datetime(1600, 12, 31)
 
-        start_date_time = datetime.datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
+        start_date_time = datetime.datetime.strptime(
+            start_time, "%Y-%m-%dT%H:%M:%SZ")
         time_difference = start_date_time - base_date
         start_time = time_difference.total_seconds()
 
-        end_date_time = datetime.datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%SZ")
+        end_date_time = datetime.datetime.strptime(
+            end_time, "%Y-%m-%dT%H:%M:%SZ")
         time_difference = end_date_time - base_date
         end_time = time_difference.total_seconds()
 
         docs = []
 
         conn = self.mssql_client.connect()
-        videos = self.mssql_client.execute_query(conn, query_videos, (start_time, end_time, start_time, end_time))
+        videos = self.mssql_client.execute_query(
+            conn, query_videos, (start_time, end_time, start_time, end_time))
 
         self.logger.info(f'Fetching videos from {start_time} to {end_time}')
 
@@ -181,7 +184,8 @@ class SyncPanopto:
             doc = {}
             url = self.get_video_url(public_id)
 
-            self.logger.info(f'Fetching video from {url} with public id {public_id}, session public id {session_public_id}, group type {group_type}')
+            self.logger.info(
+                f'Fetching video from {url} with public id {public_id}, session public id {session_public_id}, group type {group_type}')
 
             doc['category'] = self.get_category(url)
 
@@ -200,29 +204,32 @@ class SyncPanopto:
             contents.append(video.longName)
             contents.append(video.abstract)
 
-            
-            event_targets = self.mssql_client.execute_query(conn, query_event_targets, (video.sessionID))
+            event_targets = self.mssql_client.execute_query(
+                conn, query_event_targets, (video.sessionID))
 
             for event_target in event_targets:
-                event_target_id = event_target.eventTargetId 
-                type_id = event_target.eventTargetTypeID 
+                event_target_id = event_target.eventTargetId
+                type_id = event_target.eventTargetTypeID
 
                 # TRANSCRIPT, MACHINE_TRANSCRIPT, USER_CREATED_TRANSCRIPT
-                captions = self.mssql_client.execute_query(conn, query_captions, (event_target_id))
+                captions = self.mssql_client.execute_query(
+                    conn, query_captions, (event_target_id))
 
                 for caption in captions:
                     data = caption.data
                     contents.append(data)
 
                 # PRIMARY
-                events = self.mssql_client.execute_query(conn, query_events, (event_target_id))
+                events = self.mssql_client.execute_query(
+                    conn, query_events, (event_target_id))
 
                 for event in events:
                     caption = event.caption
                     contents.append(caption)
 
                 # POWERPOINT
-                slides = self.mssql_client.execute_query(conn, query_slides, (event_target_id))
+                slides = self.mssql_client.execute_query(
+                    conn, query_slides, (event_target_id))
                 for slide in slides:
                     slide_title = slide.title
 
@@ -232,14 +239,17 @@ class SyncPanopto:
                     slide_content = slide.content
                     if slide_content:
                         contents.append(slide_content)
-            
-            thumbnail_folder_path = thumbnail_root_dir + f'/{session_public_id}/*_et/thumbs/*.jpg'
+
+            thumbnail_folder_path = thumbnail_root_dir + \
+                f'/{session_public_id}/*_et/thumbs/*.jpg'
             thumbnail_paths = glob.glob(thumbnail_folder_path)
-            thumbnail_paths = sorted(thumbnail_paths, key=lambda x: os.path.basename(x).lower())
+            thumbnail_paths = sorted(
+                thumbnail_paths, key=lambda x: os.path.basename(x).lower())
 
             if thumbnail_paths:
                 thumbnail_path = thumbnail_paths[0]
-                relative_path = thumbnail_path.replace(r'\\10.18.25.144\Web', '').replace('\\', '/')
+                relative_path = thumbnail_path.replace(
+                    r'\\10.18.25.144\Web', '').replace('\\', '/')
                 thumbnail_url = self.thumbnail_root_url + relative_path
                 doc['thumbnail'] = thumbnail_url
             else:
@@ -247,16 +257,18 @@ class SyncPanopto:
 
             # self.panopto_client.dowload_video_by_session_id(public_id)
 
-            contents = list(filter(lambda item: item is not None and len(item) > 0, contents))
-            html_string = '\n'.join(list(dict.fromkeys(contents))) + doc['body']
+            contents = list(
+                filter(lambda item: item is not None and len(item) > 0, contents))
+            html_string = '\n'.join(
+                list(dict.fromkeys(contents))) + doc['body']
             soup = BeautifulSoup(html_string, 'html.parser')
             doc['body'] = soup.get_text()
 
             # source
             doc['source'] = 'training'
-            
+
             docs.append(doc)
-            
+
         conn.close()
         return docs
 
@@ -283,23 +295,21 @@ class SyncPanopto:
             return [ext[1:]]
         else:
             return ['link']
-        
-
 
     def perform_sync(self, date_ranges):
         documents_to_index = []
         ids_storage = {}
-        
+
         try:
             fetched_documents = self.fetch_videos(date_ranges)
-            
+
             self.queue.append_to_queue(fetched_documents)
             documents_to_index.extend(fetched_documents)
         except Exception as exception:
-            self.logger.error(f"Error while fetching videos. Error: {exception}")
+            self.logger.error(
+                f"Error while fetching videos. Error: {exception}")
 
         for doc in documents_to_index:
             ids_storage.update({doc["id"]: doc["url"]})
 
-        print('finished')
         return ids_storage

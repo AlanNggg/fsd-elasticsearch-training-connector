@@ -10,6 +10,7 @@ from .utils import split_documents_into_equal_chunks
 BATCH_SIZE = 100
 CONNECTION_TIMEOUT = 1000
 
+
 class SyncElasticSearch:
 
     def __init__(self, config, logger, elastic_search_custom_client, queue):
@@ -23,51 +24,15 @@ class SyncElasticSearch:
     def index_documents(self, documents, upsert=False):
         self.total_documents_found += len(documents)
         if documents:
-            if upsert:
-                query = {
-                    "query": {
-                        "match_all": {}
-                    }
-                }
-                # Fetch all documents using the scan helper
-                results = scan(
-                    self.elastic_search_client,
-                    index=self.source,
-                    query=query,
-                    size=1000  # Number of documents to retrieve per batch (adjust as needed)
-                )
-
-                fetched_documents = {}
-                for item in results:
-                    item_id = item['_source']['id']
-                    fetched_documents[item_id] = {
-                        '_op_type': 'update',
-                        '_id': item['_id'],
-                    }
-
-                documents_to_update = []
-                documents_to_insert = []
-                for item in documents:
-                    item_id = item['id']
-                    if item_id in fetched_documents:
-                        merged_item = {
-                            **fetched_documents[item_id], 
-                            'doc': item
-                        }  # Merge the dictionaries
-                        documents_to_update.append(merged_item)
-                    else:
-                        documents_to_insert.append(item)
-                        
-                documents = documents_to_update + documents_to_insert
-
             values = self.elastic_search_custom_client.index_documents(
                 documents=documents,
                 timeout=CONNECTION_TIMEOUT,
+                upsert=upsert
             )
 
             if values:
                 documents_indexed, errors = values
-                
+
                 if errors:
                     for error in errors:
                         self.logger.error(
@@ -94,7 +59,8 @@ class SyncElasticSearch:
                 while len(documents_to_index) < BATCH_SIZE:
                     document = self.queue.get()
                     if document.get("type") == "signal_close":
-                        self.logger.info(f"Found an end signal in the queue. Closing Thread ID {threading.get_ident()}")
+                        self.logger.info(
+                            f"Found an end signal in the queue. Closing Thread ID {threading.get_ident()}")
                         signal_open = False
                         break
                     else:

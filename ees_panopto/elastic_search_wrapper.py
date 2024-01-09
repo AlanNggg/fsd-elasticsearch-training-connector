@@ -6,7 +6,7 @@
 """This module perform operations related to Enterprise Search based on the Enterprise Search version
 """
 from elasticsearch import Elasticsearch
-from elasticsearch.helpers import BulkIndexError, bulk
+from elasticsearch.helpers import BulkIndexError, bulk, scan
 
 
 class ElasticSearchWrapper:
@@ -20,18 +20,18 @@ class ElasticSearchWrapper:
             self.source = config.get_value("elasticsearch.source")
         else:
             self.source = args.source
-            
+
         self.username = config.get_value("elasticsearch.username")
         self.password = config.get_value("elasticsearch.password")
         self.elastic_search_client = Elasticsearch(
-            self.host, 
-            verify_certs=False, 
-            ssl_show_warn=False, 
+            self.host,
+            verify_certs=False,
+            ssl_show_warn=False,
             http_auth=(self.username, self.password),
             # sniff_on_start=True,  # sniff before doing anything
             sniff_on_connection_fail=True,  # refresh nodes after a node fails to respond
             sniffer_timeout=60,  # and also every 60 seconds
-            retry_on_timeout=True,  
+            retry_on_timeout=True,
         )
         self.retry_count = int(config.get_value("retry_count"))
 
@@ -43,26 +43,64 @@ class ElasticSearchWrapper:
 
     def remove_permissions(self, permission):
         raise Exception("Not Implemented")
-    
+
     def create_content_source(self, schema, display, name, is_searchable):
         raise Exception("Not Implemented")
-    
+
     def delete_documents(self, document_ids):
         raise Exception("Not Implemented")
 
-    def index_documents(self, documents, timeout):
+    def index_documents(self, documents, timeout, upsert=False):
         """Indexes one or more new documents into a custom content source, or updates one
         or more existing documents
         :param documents: list of documents to be indexed
         :param timeout: Timeout in seconds
         """
         try:
+            if upsert:
+                query = {
+                    "query": {
+                        "match_all": {}
+                    }
+                }
+                # Fetch all documents using the scan helper
+                results = scan(
+                    self.elastic_search_client,
+                    index=self.source,
+                    query=query,
+                    # Number of documents to retrieve per batch (adjust as needed)
+                    size=1000
+                )
+
+                fetched_documents = {}
+                for item in results:
+                    item_id = item['_source']['id']
+                    fetched_documents[item_id] = {
+                        '_op_type': 'update',
+                        '_id': item['_id'],
+                    }
+
+                documents_to_update = []
+                documents_to_insert = []
+                for item in documents:
+                    item_id = item['id']
+                    if item_id in fetched_documents:
+                        merged_item = {
+                            **fetched_documents[item_id],
+                            'doc': item
+                        }  # Merge the dictionaries
+                        documents_to_update.append(merged_item)
+                    else:
+                        documents_to_insert.append(item)
+
+                documents = documents_to_update + documents_to_insert
+
             # raise_on_error: DO NOT raise BulkIndexError
             responses = bulk(
-                self.elastic_search_client, 
-                actions=documents, 
-                index=self.source, 
-                max_retries=self.retry_count, 
+                self.elastic_search_client,
+                actions=documents,
+                index=self.source,
+                max_retries=self.retry_count,
                 request_timeout=timeout,
                 raise_on_error=False,
                 stats_only=True)
@@ -73,5 +111,6 @@ class ElasticSearchWrapper:
             # for err in e.errors:
             #     print(err)
         except Exception as exception:
-            self.logger.error(f"Error while indexing the documents. Error: {exception}")
+            self.logger.error(
+                f"Error while indexing the documents. Error: {exception}")
         return None
