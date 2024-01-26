@@ -37,7 +37,8 @@ class FullSyncCommand(BaseCommand):
 
         thread_count = self.config.get_value("panopto_sync_thread_count")
 
-        start_time, end_time = self.config.get_value("start_time"), current_time
+        start_time, end_time = self.config.get_value(
+            "start_time"), current_time
 
         try:
             sync_panopto = SyncPanopto(
@@ -56,21 +57,26 @@ class FullSyncCommand(BaseCommand):
                 end_time,
                 thread_count,
             )
-            time_range_list = [(datelist[num], datelist[num + 1]) for num in range(0, thread_count)]
+            time_range_list = [(datelist[num], datelist[num + 1])
+                               for num in range(0, thread_count)]
             storage_with_collection = self.local_storage.get_storage_with_collection()
-            global_keys = self.create_jobs(thread_count, sync_panopto.perform_sync, (), time_range_list)
+            global_keys = self.create_jobs(
+                thread_count, sync_panopto.perform_sync, (), time_range_list)
 
             try:
-                storage_with_collection["global_keys"]["videos"].update(global_keys)
+                storage_with_collection["global_keys"]["videos"].update(
+                    global_keys)
             except ValueError as value_error:
-                self.logger.error(f"Exception while updating storage: {value_error}")
+                self.logger.error(
+                    f"Exception while updating storage: {value_error}")
 
             # Send end signals for each live threads to notify them to close watching the queue
             # for any incoming documents
             for _ in range(self.config.get_value("enterprise_search_sync_thread_count")):
                 queue.end_signal()
         except Exception as exception:
-            self.logger.error("Error while Fetching from Panopto. Checkpoint not saved")
+            self.logger.error(
+                "Error while Fetching from Panopto. Checkpoint not saved")
             raise exception
 
         self.local_storage.update_storage(storage_with_collection)
@@ -80,11 +86,17 @@ class FullSyncCommand(BaseCommand):
         :param queue: Shared queue to fetch the stored documents
         """
         logger = self.logger
-        thread_count = self.config.get_value("enterprise_search_sync_thread_count")
-        sync_es = SyncElasticSearch(self.config, logger, self.elastic_search_custom_client, queue)
+        thread_count = self.config.get_value(
+            "enterprise_search_sync_thread_count")
+        sync_es = SyncElasticSearch(
+            self.config, logger, self.elastic_search_custom_client, queue)
 
-        self.create_jobs(thread_count, sync_es.perform_sync, (), None)
+        self.create_jobs(
+            thread_count, sync_es.perform_sync, (), None)
 
+        results = sync_es.get_status()
+
+        return results
 
     def execute(self):
         """This function execute the full sync."""
@@ -96,7 +108,12 @@ class FullSyncCommand(BaseCommand):
         logger.info(f"Indexing started at: {current_time}")
 
         queue = ConnectorQueue(logger)
+
         self.start_producer(queue)
-        self.start_consumer(queue)
+
+        results = self.start_consumer(queue)
+
         checkpoint.set_checkpoint(current_time, INDEXING_TYPE, 'panopto')
         logger.info(f"Indexing ended at: {get_current_time()}")
+
+        return results

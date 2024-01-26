@@ -55,10 +55,12 @@ class BaseCommand:
         stream_handler = logging.StreamHandler()
 
         info_log_file = self.args.info_log_file
-        info_file_handler = logging.FileHandler(info_log_file, mode='w', encoding='utf-8')
+        info_file_handler = logging.FileHandler(
+            info_log_file, mode='w', encoding='utf-8')
 
         error_log_file = self.args.error_log_file
-        error_file_handler = logging.FileHandler(error_log_file, mode='w', encoding='utf-8')
+        error_file_handler = logging.FileHandler(
+            error_log_file, mode='w', encoding='utf-8')
         # Uncomment the following lines to output logs in ECS-compatible format
         # formatter = ecs_logging.StdlibFormatter()
         # handler.setFormatter(formatter)
@@ -91,7 +93,7 @@ class BaseCommand:
     @cached_property
     def elastic_search_custom_client(self):
         return ElasticSearchWrapper(self.logger, self.config, self.args)
-    
+
     @cached_property
     def config(self):
         """Get the configuration for the connector for the running command."""
@@ -109,7 +111,7 @@ class BaseCommand:
             based on the patterns defined in configuration file.
         """
         return IndexingRules(self.config)
-    
+
     def create_jobs(self, thread_count, func, args, iterable_list):
         """Apply async calls using multithreading to the targeted function
         :param thread_count: Total number of threads to be spawned
@@ -130,13 +132,16 @@ class BaseCommand:
                     try:
                         documents.update(future.result())
                     except Exception as exception:
-                        self.logger.exception(f"Error while fetching in path {path}. Error {exception}")
+                        self.logger.exception(
+                            f"Error while fetching in path {path}. Error {exception}")
         else:
             with ThreadPoolExecutor(max_workers=thread_count) as executor:
-                for _ in range(thread_count):
-                    executor.submit(func, *args)
-        return documents
+                futures = [executor.submit(func, *args)
+                           for _ in range(thread_count)]
+                result = [future.result() for future in as_completed(futures)]
+                return result
 
+        return documents
 
     @staticmethod
     def producer(thread_count, func, args, items, wait=False):
@@ -170,14 +175,15 @@ class BaseCommand:
 
     @cached_property
     def leadtools_engine(self):
-        common_module = self.config.get_value('leadtools.common_module_python_path')
+        common_module = self.config.get_value(
+            'leadtools.common_module_python_path')
         print(common_module)
         sys.path.append(common_module)
-        
+
         from .leadtools_engine import LeadTools
 
-        return LeadTools(self.config, self.logger) 
-    
+        return LeadTools(self.config, self.logger)
+
     @cached_property
     def panopto_client(self):
-        return Panopto(self.config, self.logger) 
+        return Panopto(self.config, self.logger)

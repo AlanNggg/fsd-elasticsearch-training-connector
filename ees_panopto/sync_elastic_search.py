@@ -20,6 +20,7 @@ class SyncElasticSearch:
         self.queue = queue
         self.total_documents_indexed = 0
         self.total_documents_found = 0
+        self.total_documents_failed = 0
 
     def index_documents(self, documents, upsert=False):
         self.total_documents_found += len(documents)
@@ -34,6 +35,8 @@ class SyncElasticSearch:
                 documents_indexed, errors = values
 
                 if errors:
+                    self.total_documents_failed += len(errors)
+
                     for error in errors:
                         self.logger.error(
                             "Error while indexing. Error: %s"
@@ -73,3 +76,6 @@ class SyncElasticSearch:
             self.logger.error(exception)
         self.logger.info(f"Thread ID: {threading.get_ident()} Total {self.total_documents_indexed} documents \
             indexed out of: {self.total_documents_found} till now..")
+
+    def get_status(self):
+        return self.total_documents_found, self.total_documents_indexed, self.total_documents_failed

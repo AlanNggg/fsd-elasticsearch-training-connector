@@ -10,6 +10,7 @@ related to uploading data from Network Drives
 to Elastic Enterprise Search with subcommands."""
 
 import getpass
+import json
 import os
 from argparse import ArgumentParser
 
@@ -107,7 +108,8 @@ def main(args=None):
         args.password = getpass.getpass(prompt='Password: ', stream=None)
 
     if not args.config_file:
-        args.config_file = os.path.join(os.path.expanduser('~'), '.local', 'config', 'panopto_connector.yml')
+        args.config_file = os.path.join(os.path.expanduser(
+            '~'), '.local', 'config', 'panopto_connector.yml')
 
     if not args.error_log_file:
         current_directory = os.getcwd()
@@ -127,6 +129,9 @@ def run(args):
 
     This method takes already parsed and validated arguments
     and attempts to run the command with specified arguments."""
-    commands[args.cmd](args).execute()
+    results = commands[args.cmd](args).execute()
+
+    if results:
+        print(json.dumps(results))
 
     return 0
