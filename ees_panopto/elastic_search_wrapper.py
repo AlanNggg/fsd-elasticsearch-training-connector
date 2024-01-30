@@ -6,7 +6,7 @@
 """This module perform operations related to Enterprise Search based on the Enterprise Search version
 """
 from elasticsearch import Elasticsearch
-from elasticsearch.helpers import BulkIndexError, bulk, scan
+from elasticsearch.helpers import BulkIndexError, bulk, scan, streaming_bulk
 
 
 class ElasticSearchWrapper:
@@ -50,51 +50,88 @@ class ElasticSearchWrapper:
     def delete_documents(self, document_ids):
         raise Exception("Not Implemented")
 
-    def index_documents(self, documents, timeout, upsert=False):
+    def get_all_documents(self):
+        query = {
+            "query": {
+                "match_all": {}
+            }
+        }
+        # Fetch all documents using the scan helper
+        results = scan(
+            self.elastic_search_client,
+            index=self.source,
+            query=query,
+            # Number of documents to retrieve per batch (adjust as needed)
+            size=1000
+        )
+
+        return results
+
+    def index_documents_intremental(self, documents, timeout):
+        try:
+            total_documents_appended = 0
+            total_documents_updated = 0
+            errors = []
+
+            # Fetch all documents using the scan helper
+            results = self.get_all_documents()
+
+            fetched_documents = {}
+            for item in results:
+                item_id = item['_source']['id']
+                fetched_documents[item_id] = {
+                    '_op_type': 'update',
+                    '_id': item['_id'],
+                }
+
+            documents_to_update = []
+            documents_to_insert = []
+            for item in documents:
+                item_id = item['id']
+                if item_id in fetched_documents:
+                    merged_item = {
+                        **fetched_documents[item_id],
+                        'doc': item
+                    }  # Merge the dictionaries
+                    documents_to_update.append(merged_item)
+                else:
+                    documents_to_insert.append(item)
+
+            documents = documents_to_update + documents_to_insert
+
+            for ok, item in streaming_bulk(
+                self.elastic_search_client,
+                actions=documents,
+                index=self.source,
+                max_retries=self.retry_count,
+                request_timeout=timeout,
+                raise_on_error=False,
+                yield_ok=True,
+                ignore_status=(),
+            ):
+                operation_type = list(item.keys())[0]
+
+                if not ok:
+                    errors.append(item)
+                else:
+                    if operation_type == 'index':
+                        total_documents_appended += 1
+                    elif operation_type == 'update':
+                        total_documents_updated += 1
+
+            return total_documents_appended, total_documents_updated, errors
+        except Exception as exception:
+            self.logger.error(
+                f"Error while indexing the documents. Error: {exception}")
+        return None
+
+    def index_documents(self, documents, timeout):
         """Indexes one or more new documents into a custom content source, or updates one
         or more existing documents
         :param documents: list of documents to be indexed
         :param timeout: Timeout in seconds
         """
         try:
-            if upsert:
-                query = {
-                    "query": {
-                        "match_all": {}
-                    }
-                }
-                # Fetch all documents using the scan helper
-                results = scan(
-                    self.elastic_search_client,
-                    index=self.source,
-                    query=query,
-                    # Number of documents to retrieve per batch (adjust as needed)
-                    size=1000
-                )
-
-                fetched_documents = {}
-                for item in results:
-                    item_id = item['_source']['id']
-                    fetched_documents[item_id] = {
-                        '_op_type': 'update',
-                        '_id': item['_id'],
-                    }
-
-                documents_to_update = []
-                documents_to_insert = []
-                for item in documents:
-                    item_id = item['id']
-                    if item_id in fetched_documents:
-                        merged_item = {
-                            **fetched_documents[item_id],
-                            'doc': item
-                        }  # Merge the dictionaries
-                        documents_to_update.append(merged_item)
-                    else:
-                        documents_to_insert.append(item)
-
-                documents = documents_to_update + documents_to_insert
-
             # raise_on_error: DO NOT raise BulkIndexError
             responses = bulk(
                 self.elastic_search_client,
@@ -102,8 +139,7 @@ class ElasticSearchWrapper:
                 index=self.source,
                 max_retries=self.retry_count,
                 request_timeout=timeout,
-                raise_on_error=False,
-                stats_only=True)
+                raise_on_error=False)
             self.logger.info(responses)
             return responses
         # except BulkIndexError as e:
