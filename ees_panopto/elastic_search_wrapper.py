@@ -67,7 +67,7 @@ class ElasticSearchWrapper:
 
         return results
 
-    def index_documents_intremental(self, documents, timeout):
+    def index_documents_incremental(self, documents, timeout):
         try:
             total_documents_appended = 0
             total_documents_updated = 0
