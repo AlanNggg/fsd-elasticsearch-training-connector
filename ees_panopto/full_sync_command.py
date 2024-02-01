@@ -117,4 +117,12 @@ class FullSyncCommand(BaseCommand):
         checkpoint.set_checkpoint(current_time, INDEXING_TYPE, 'panopto')
         logger.info(f"Indexing ended at: {get_current_time()}")
 
-        return total_documents_found, total_documents_indexed, total_documents_failed
+        output = {
+            'total_documents_found': total_documents_found,
+            'total_documents_indexed': total_documents_indexed,
+            'total_documents_appended': total_documents_appended,
+            'total_documents_updated': total_documents_updated,
+            'total_documents_failed': total_documents_failed
+        }
+
+        return output

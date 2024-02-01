@@ -39,6 +39,7 @@ class SyncElasticSearch:
 
                     documents_indexed = documents_appended + documents_updated
 
+                    self.total_documents_indexed += documents_indexed
                     self.total_documents_appended += documents_appended
                     self.total_documents_updated += documents_updated
 

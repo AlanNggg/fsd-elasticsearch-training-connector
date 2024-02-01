@@ -177,7 +177,6 @@ class BaseCommand:
     def leadtools_engine(self):
         common_module = self.config.get_value(
             'leadtools.common_module_python_path')
-        print(common_module)
         sys.path.append(common_module)
 
         from .leadtools_engine import LeadTools
