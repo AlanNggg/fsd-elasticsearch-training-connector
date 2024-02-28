@@ -98,7 +98,9 @@ class BaseCommand:
     def config(self):
         """Get the configuration for the connector for the running command."""
         file_name = self.args.config_file
-        return Configuration(file_name)
+        config_json = self.args.config_json
+        read_from_db = self.args.read_config_from_db
+        return Configuration(file_name, config_json, read_from_db)
 
     @cached_property
     def mssql_client(self):

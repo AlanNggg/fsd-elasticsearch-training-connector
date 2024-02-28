@@ -294,7 +294,7 @@ class SyncPanopto:
         elif ext in ['.pdf', '.txt', '.rtf', '.csv']:
             return [ext[1:]]
         else:
-            return ['link']
+            return [ext[1:]]
 
     def perform_sync(self, date_ranges):
         documents_to_index = []

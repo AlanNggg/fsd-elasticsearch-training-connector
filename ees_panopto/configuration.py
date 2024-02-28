@@ -27,7 +27,8 @@ class ConfigurationInvalidException(Exception):
     """
 
     def __init__(self, errors):
-        super().__init__(f"Provided configuration was invalid. Errors: {errors}.")
+        super().__init__(
+            f"Provided configuration was invalid. Errors: {errors}.")
 
         self.errors = errors
 
@@ -50,12 +51,16 @@ class Configuration:
     """Configuration class is responsible for parsing, validating and accessing
     configuration options from connector configuration file."""
 
-    def __init__(self, file_name):
+    def __init__(self, file_name, config_json=None, read_from_db=True):
         self.__configurations = {}
         self.file_name = file_name
         try:
             with open(file_name, encoding='utf-8') as stream:
                 self.__configurations = yaml.safe_load(stream)
+
+            if config_json:
+                self.__configurations.update(config_json)
+
         except YAMLError as exception:
             raise ConfigurationParsingException(file_name, exception)
         self.__configurations = self.validate()
@@ -65,26 +70,29 @@ class Configuration:
 
         for date_config in ["start_time", "end_time"]:
             value = self.__configurations[date_config]
-            self.__configurations[date_config] = self.__parse_date_config_value(value)
-            
-        if self.__configurations["include"]["ocr_path_template"]:
-            self.__configurations["include"]["ocr_path_template"] += self.get_custom_ocr_configure_from_db()
-        else:
-            self.__configurations["include"]["ocr_path_template"] = self.get_custom_ocr_configure_from_db()
+            self.__configurations[date_config] = self.__parse_date_config_value(
+                value)
+
+        if read_from_db:
+            if self.__configurations["include"]["ocr_path_template"]:
+                self.__configurations["include"]["ocr_path_template"] += self.get_custom_ocr_configure_from_db()
+            else:
+                self.__configurations["include"]["ocr_path_template"] = self.get_custom_ocr_configure_from_db(
+                )
 
     def get_custom_ocr_configure_from_db(self):
         connection = pymysql.connect(host='10.18.2.188',
-                             user='ocr_path_setting',
-                             password='ocr_path_setting',
-                             database='fsd_search_portal',
-                             cursorclass=pymysql.cursors.DictCursor)
+                                     user='ocr_path_setting',
+                                     password='ocr_path_setting',
+                                     database='fsd_search_portal',
+                                     cursorclass=pymysql.cursors.DictCursor)
 
         with connection:
             with connection.cursor() as cursor:
                 # Read a single record
                 sql = "SELECT path, language FROM `ocr_path_setting` WHERE `source`=%s"
                 cursor.execute(sql, ('panopto',))
-                result = cursor.fetchall() 
+                result = cursor.fetchall()
                 paths = list(map(lambda x: x, result))
 
         return paths

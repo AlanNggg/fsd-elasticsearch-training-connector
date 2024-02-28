@@ -12,7 +12,7 @@ to Elastic Enterprise Search with subcommands."""
 import getpass
 import json
 import os
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 
 from .bootstrap_command import BootstrapCommand
 from .deletion_sync_command import DeletionSyncCommand
@@ -69,6 +69,15 @@ def _parser():
         metavar="SOURCE",
         help="elasticsearch source"
     )
+    parser.add_argument('-j', '--config-json', type=str,
+                        metavar="CONFIGURATION_JSON", help='configuration json')
+    parser.add_argument(
+        "-r",
+        '--read-config-from-db',
+        metavar="READ_CONFIG_FROM_DB",
+        help="read config from db",
+        action=BooleanOptionalAction
+    )
 
     subparsers = parser.add_subparsers(dest="cmd")
     subparsers.required = True
@@ -120,6 +129,10 @@ def main(args=None):
         current_directory = os.getcwd()
         info_log_file = "info.log"
         args.info_log_file = os.path.join(current_directory, info_log_file)
+
+    # parse json if exist
+    if args.config_json:
+        args.config_json = json.loads(args.config_json)
 
     run(args)
 
