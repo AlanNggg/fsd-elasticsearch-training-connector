@@ -81,21 +81,24 @@ class Configuration:
                 )
 
     def get_custom_ocr_configure_from_db(self):
-        connection = pymysql.connect(host='10.18.2.188',
-                                     user='ocr_path_setting',
-                                     password='ocr_path_setting',
-                                     database='fsd_search_portal',
-                                     cursorclass=pymysql.cursors.DictCursor)
+        try:
+            connection = pymysql.connect(host='10.18.2.188',
+                                        user='ocr_path_setting',
+                                        password='ocr_path_setting',
+                                        database='fsd_search_portal',
+                                        cursorclass=pymysql.cursors.DictCursor)
 
-        with connection:
-            with connection.cursor() as cursor:
-                # Read a single record
-                sql = "SELECT path, language FROM `ocr_path_setting` WHERE `source`=%s"
-                cursor.execute(sql, ('panopto',))
-                result = cursor.fetchall()
-                paths = list(map(lambda x: x, result))
+            with connection:
+                with connection.cursor() as cursor:
+                    # Read a single record
+                    sql = "SELECT path, language FROM `ocr_path_setting` WHERE `source`=%s"
+                    cursor.execute(sql, ('panopto',))
+                    result = cursor.fetchall()
+                    paths = list(map(lambda x: x, result))
 
-        return paths
+            return paths
+        except Exception as exception:
+            return []
 
     def validate(self):
         """Validates each properties defined in the yaml configuration file
