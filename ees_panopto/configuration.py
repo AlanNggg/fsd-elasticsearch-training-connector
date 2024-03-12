@@ -8,6 +8,8 @@
     This module can be used to read and validate configuration file that defines
     the settings of the Network Drives Server connector.
 """
+import json
+
 import pymysql
 import pymysql.cursors
 import yaml
@@ -80,13 +82,24 @@ class Configuration:
                 self.__configurations["include"]["ocr_path_template"] = self.get_custom_ocr_configure_from_db(
                 )
 
+            if self.__configurations["categories"]:
+                self.__configurations["categories"].update(
+                    self.get_categories_from_db())
+            else:
+                self.__configurations["categories"] = self.get_categories_from_db(
+                )
+
     def get_custom_ocr_configure_from_db(self):
         try:
-            connection = pymysql.connect(host='10.18.2.188',
-                                        user='ocr_path_setting',
-                                        password='ocr_path_setting',
-                                        database='fsd_search_portal',
-                                        cursorclass=pymysql.cursors.DictCursor)
+            host = self.get_value('fsd_search_db.host')
+            database = self.get_value('fsd_search_db.database')
+            username = self.get_value('fsd_search_db.username')
+            password = self.get_value('fsd_search_db.password')
+            connection = pymysql.connect(host=host,
+                                         user=username,
+                                         password=password,
+                                         database=database,
+                                         cursorclass=pymysql.cursors.DictCursor)
 
             with connection:
                 with connection.cursor() as cursor:
@@ -99,6 +112,35 @@ class Configuration:
             return paths
         except Exception as exception:
             return []
+
+    def get_categories_from_db(self):
+        try:
+            host = self.get_value('fsd_search_db.host')
+            database = self.get_value('fsd_search_db.database')
+            username = self.get_value('fsd_search_db.username')
+            password = self.get_value('fsd_search_db.password')
+            connection = pymysql.connect(host=host,
+                                         user=username,
+                                         password=password,
+                                         database=database,
+                                         cursorclass=pymysql.cursors.DictCursor)
+
+            with connection:
+                with connection.cursor() as cursor:
+                    sql = "SELECT value, type FROM `extension`"
+                    cursor.execute(sql)
+                    results = cursor.fetchall()
+
+                    categories = {}
+                    for result in results:
+                        value = result['value']
+                        type_ = json.loads(result['type'])
+                        type_ = [list(item.keys())[0] for item in type_]
+                        categories[value] = type_
+
+            return categories
+        except Exception as exception:
+            return {}
 
     def validate(self):
         """Validates each properties defined in the yaml configuration file

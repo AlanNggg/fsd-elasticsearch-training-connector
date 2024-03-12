@@ -63,6 +63,26 @@ schema = {
         'type': 'string',
         'empty': False
     },
+    'fsd_search_db.host': {
+        'required': True,
+        'type': 'string',
+        'empty': False
+    },
+    'fsd_search_db.database': {
+        'required': True,
+        'type': 'string',
+        'empty': False
+    },
+    'fsd_search_db.username': {
+        'required': True,
+        'type': 'string',
+        'empty': False
+    },
+    'fsd_search_db.password': {
+        'required': True,
+        'type': 'string',
+        'empty': False
+    },
     'enterprise_search.api_key': {
         'required': False,
         'type': 'string',
@@ -142,6 +162,16 @@ schema = {
                 }
             }
         }
+    },
+    'categories': {
+        'nullable': True,
+        'type': 'dict',
+        "valuesrules": {
+            "type": "list"
+        },
+        "keysrules": {
+            "type": "string"
+        },
     },
     'leadtools.license_path': {
         'required': True,

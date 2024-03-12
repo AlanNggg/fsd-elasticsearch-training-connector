@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 from tika import parser
 from tika.tika import TikaException
 
-from .utils import hash_id, run_tika
+from .utils import hash_id, is_website_url, run_tika
 
 requests.packages.urllib3.disable_warnings()
 
@@ -150,6 +150,8 @@ class SyncPanopto:
         self.start_time = start_time
         self.end_time = end_time
 
+        self.categories = config.get_value("categories")
+
     def get_video_url(self, public_id):
         url = f'{self.host}//Panopto/Pages/Viewer.aspx?id={public_id}'
         return url
@@ -275,26 +277,26 @@ class SyncPanopto:
     def get_category(self, url):
         """Get the file type hierarchy of the given filename."""
         ext = os.path.splitext(url)[-1].lower()
-        # TODO: Post
 
-        # image
-        if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']:
-            return ['image', ext[1:]]
-        # video
-        elif ext in ['.mp4', '.avi', '.mov', '.wmv']:
-            return ['video', ext[1:]]
-        # office
-        elif ext in ['.xls', '.xlsx', '.xlsm', '.xlsb']:
-            return ['xlsx']
+        if ext in ['.xls', '.xlsx', '.xlsm', '.xlsb']:
+            return ['xlsx', ext[1:]]
         elif ext in ['.doc', '.docx', '.docm']:
-            return ['docx']
+            return ['docx', ext[1:]]
         elif ext in ['.ppt', '.pptx', '.pptm']:
-            return ['pptx']
-        # pdf, text, rtf, csv
-        elif ext in ['.pdf', '.txt', '.rtf', '.csv']:
-            return [ext[1:]]
-        else:
-            return [ext[1:]]
+            return ['pptx', ext[1:]]
+
+        # example: ['image', ext[1:]] if ['.jpg', '.jpeg', '.png', '.bmp', '.gif'], ['video', ext[1:]] if ['.mp4', '.avi', '.mov', '.wmv']
+
+        if self.categories:
+            for parent, children in self.categories.items():
+                for child in children:
+                    if child == ext[1:]:
+                        return [parent, ext[1:]]
+
+        if is_website_url(url):
+            return ['link']
+
+        return [ext[1:]]
 
     def perform_sync(self, date_ranges):
         documents_to_index = []
