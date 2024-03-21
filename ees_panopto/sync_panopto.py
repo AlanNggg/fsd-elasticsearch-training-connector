@@ -142,6 +142,7 @@ class SyncPanopto:
         self.queue = queue
         self.leadtools_engine = leadtools_engine
         self.panopto_client = panopto_client
+        self.fsd_search_portal_client = config.fsd_search_portal_client
 
         self.host = config.get_value("panopto.host_url")
         self.thumbnail_root_url = f'{self.host}/Panopto/Content/Sessions'
@@ -268,6 +269,10 @@ class SyncPanopto:
 
             # source
             doc['source'] = 'training'
+
+            # click count
+            doc['click_count'] = self.fsd_search_portal_client.get_click_count(
+                doc['url'])
 
             docs.append(doc)
 

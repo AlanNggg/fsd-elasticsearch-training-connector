@@ -17,6 +17,7 @@ from cerberus import Validator
 from yaml.error import YAMLError
 
 from .constant import RFC_3339_DATETIME_FORMAT
+from .fsd_search_portal_client import FsdSearchPortalClient
 from .schema import schema
 
 
@@ -56,6 +57,7 @@ class Configuration:
     def __init__(self, file_name, config_json=None, read_from_db=True):
         self.__configurations = {}
         self.file_name = file_name
+        self.fsd_search_portal_client = None
         try:
             with open(file_name, encoding='utf-8') as stream:
                 self.__configurations = yaml.safe_load(stream)
@@ -75,72 +77,32 @@ class Configuration:
             self.__configurations[date_config] = self.__parse_date_config_value(
                 value)
 
+        self.create_fsd_search_portal_client()
+
         if read_from_db:
             if self.__configurations["include"]["ocr_path_template"]:
-                self.__configurations["include"]["ocr_path_template"] += self.get_custom_ocr_configure_from_db()
+                self.__configurations["include"]["ocr_path_template"] += self.fsd_search_portal_client.get_custom_ocr_configure(
+                    'training')
             else:
-                self.__configurations["include"]["ocr_path_template"] = self.get_custom_ocr_configure_from_db(
-                )
+                self.__configurations["include"]["ocr_path_template"] = self.fsd_search_portal_client.get_custom_ocr_configure(
+                    'training')
 
             if self.__configurations["categories"]:
                 self.__configurations["categories"].update(
-                    self.get_categories_from_db())
+                    self.fsd_search_portal_client.get_categories())
             else:
-                self.__configurations["categories"] = self.get_categories_from_db(
+                self.__configurations["categories"] = self.fsd_search_portal_client.get_categories(
                 )
 
-    def get_custom_ocr_configure_from_db(self):
-        try:
+    def create_fsd_search_portal_client(self):
+        if self.fsd_search_portal_client is None:
             host = self.get_value('fsd_search_db.host')
             database = self.get_value('fsd_search_db.database')
             username = self.get_value('fsd_search_db.username')
             password = self.get_value('fsd_search_db.password')
-            connection = pymysql.connect(host=host,
-                                         user=username,
-                                         password=password,
-                                         database=database,
-                                         cursorclass=pymysql.cursors.DictCursor)
 
-            with connection:
-                with connection.cursor() as cursor:
-                    # Read a single record
-                    sql = "SELECT path, language FROM `ocr_path_setting` WHERE `source`=%s"
-                    cursor.execute(sql, ('panopto',))
-                    result = cursor.fetchall()
-                    paths = list(map(lambda x: x, result))
-
-            return paths
-        except Exception as exception:
-            return []
-
-    def get_categories_from_db(self):
-        try:
-            host = self.get_value('fsd_search_db.host')
-            database = self.get_value('fsd_search_db.database')
-            username = self.get_value('fsd_search_db.username')
-            password = self.get_value('fsd_search_db.password')
-            connection = pymysql.connect(host=host,
-                                         user=username,
-                                         password=password,
-                                         database=database,
-                                         cursorclass=pymysql.cursors.DictCursor)
-
-            with connection:
-                with connection.cursor() as cursor:
-                    sql = "SELECT value, type FROM `extension`"
-                    cursor.execute(sql)
-                    results = cursor.fetchall()
-
-                    categories = {}
-                    for result in results:
-                        value = result['value']
-                        type_ = json.loads(result['type'])
-                        type_ = [list(item.keys())[0] for item in type_]
-                        categories[value] = type_
-
-            return categories
-        except Exception as exception:
-            return {}
+            self.fsd_search_portal_client = FsdSearchPortalClient(
+                host, database, username, password)
 
     def validate(self):
         """Validates each properties defined in the yaml configuration file
