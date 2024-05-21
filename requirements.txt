@@ -35,7 +35,7 @@ toml==0.10.2
 tomli==2.0.1
 urllib3==1.26.16
 wcmatch==8.3
-pymysql==1.1.0
+pymysql==1.1.1
 ldap3==2.9.1
 pyodbc==5.0.1
 beautifulsoup4==4.12.2
