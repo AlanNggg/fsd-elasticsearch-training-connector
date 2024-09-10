@@ -77,7 +77,7 @@ class Panopto:
                 parsed_download_url = urlparse(download_url)._replace(query=None).geturl()
                 filename = parsed_download_url.rsplit("/", 1)[1]
                 self.logger.info(f"Successfully downloaded {session_id} video from {parsed_download_url} as {filename}.")
-                with open(f'./videos/{filename}', "wb") as f:
+                with open(f'D:/panopto/{filename}', "wb") as f:
                     f.write(response.content)
             
             if response.status_code >= 400 and response.status_code < 500:

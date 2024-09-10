@@ -100,9 +100,17 @@ schema = {
     },
     'elasticsearch.host_url': {
         'required': True,
-        'type': 'string',
-        'empty': False
+        'type': 'list',
+        'schema': {
+            'type': 'string',
+            'empty': False
+        }
     },
+    # 'elasticsearch.host_url': {
+    #     'required': True,
+    #     'type': 'string',
+    #     'empty': False
+    # },
     'elasticsearch.source': {
         'required': False,
         'type': 'string',
